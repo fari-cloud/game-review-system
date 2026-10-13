@@ -1,40 +1,30 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
-
-export async function GET() {
-  const reviews = await prisma.review.findMany({
-    include: { user: true, game: true },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  return NextResponse.json({ reviews });
-}
+import { prisma } from '@/lib/prisma';
 
 export async function POST(req: Request) {
   const body = await req.json();
 
-  const review = await prisma.review.create({
-    data: {
-      content: body.content,
-      rating: Number(body.rating),
-      user: {
-        connectOrCreate: {
-          where: { email: body.email || 'guest@example.com' },
-          create: {
-            email: body.email || 'guest@example.com',
-            name: body.name || 'Guest User',
-          },
-        },
-      },
-      game: {
-        connect: {
-          id: body.gameId,
-        },
-      },
+  if (!body.content || !body.gameId || !body.name || !body.email) {
+    return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
+  }
+
+  const user = await prisma.user.upsert({
+    where: { email: body.email },
+    update: { name: body.name },
+    create: {
+      email: body.email,
+      name: body.name,
     },
   });
 
-  return NextResponse.json({ review });
+  const review = await prisma.review.create({
+    data: {
+      content: body.content,
+      rating: Number(body.rating || 5),
+      userId: user.id,
+      gameId: body.gameId,
+    },
+  });
+
+  return NextResponse.json({ review }, { status: 201 });
 }
