@@ -1,7 +1,5 @@
+import { getSessionUser } from '@/lib/auth';
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
 
 export async function GET() {
   const games = await prisma.game.findMany({
@@ -12,12 +10,18 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const session = getSessionUser();
+
+  if (!session || session.role !== 'admin') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = await req.json();
 
   const game = await prisma.game.create({
     data: {
       title: body.title,
-      slug: body.slug,
+      slug: body.slug || body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       description: body.description,
       genre: body.genre,
       platform: body.platform,
@@ -27,5 +31,5 @@ export async function POST(req: Request) {
     },
   });
 
-  return NextResponse.json({ game });
+  return NextResponse.json({ game }, { status: 201 });
 }
